@@ -1,0 +1,1831 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BARRILES — Stock Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+/* ─── TOKENS ──────────────────────────────────────────────────────────────── */
+:root {
+  --bg:        #0b0d11;
+  --bg2:       #111318;
+  --bg3:       #181b22;
+  --border:    #22262f;
+  --border2:   #2d3240;
+  --text:      #e8eaf0;
+  --text2:     #8b90a0;
+  --text3:     #555a6a;
+
+  --green:     #22c55e;
+  --green-dim: rgba(34,197,94,.12);
+  --yellow:    #f59e0b;
+  --yellow-dim:rgba(245,158,11,.12);
+  --red:       #ef4444;
+  --red-dim:   rgba(239,68,68,.12);
+  --blue:      #3b82f6;
+  --blue-dim:  rgba(59,130,246,.12);
+
+  --accent:    #f59e0b;
+  --radius:    10px;
+  --radius-sm: 6px;
+  --shadow:    0 4px 24px rgba(0,0,0,.4);
+}
+
+/* ─── RESET ───────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 15px; scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Syne', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+button { cursor: pointer; font-family: inherit; border: none; outline: none; }
+input, select, textarea { font-family: 'JetBrains Mono', monospace; outline: none; }
+a { color: inherit; text-decoration: none; }
+
+/* ─── LAYOUT ──────────────────────────────────────────────────────────────── */
+.app { display: flex; min-height: 100vh; }
+
+/* SIDEBAR */
+.sidebar {
+  width: 220px;
+  min-height: 100vh;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  left: 0; top: 0; bottom: 0;
+  z-index: 100;
+  transition: transform .25s ease;
+}
+.sidebar-logo {
+  padding: 24px 20px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-logo .brand {
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: -.5px;
+  color: var(--accent);
+  line-height: 1;
+}
+.sidebar-logo .brand-sub {
+  font-size: .68rem;
+  color: var(--text3);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-top: 2px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.nav { flex: 1; padding: 16px 0; }
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 20px;
+  color: var(--text2);
+  font-weight: 600;
+  font-size: .88rem;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: all .15s;
+  user-select: none;
+}
+.nav-item:hover { color: var(--text); background: rgba(255,255,255,.03); }
+.nav-item.active {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  background: rgba(245,158,11,.06);
+}
+.nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+.sidebar-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  font-size: .72rem;
+  color: var(--text3);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* MAIN */
+.main {
+  margin-left: 220px;
+  flex: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.topbar {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 0 28px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.topbar-title {
+  font-weight: 800;
+  font-size: 1.05rem;
+  letter-spacing: -.3px;
+}
+.topbar-right { display: flex; align-items: center; gap: 10px; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: .82rem;
+  font-weight: 700;
+  font-family: 'Syne', sans-serif;
+  transition: all .15s;
+  letter-spacing: .3px;
+}
+.btn-primary {
+  background: var(--accent);
+  color: #000;
+}
+.btn-primary:hover { background: #fbbf24; transform: translateY(-1px); }
+.btn-ghost {
+  background: transparent;
+  color: var(--text2);
+  border: 1px solid var(--border2);
+}
+.btn-ghost:hover { color: var(--text); border-color: var(--text3); }
+.btn-sm { padding: 5px 11px; font-size: .76rem; }
+
+.page { display: none; padding: 28px; flex: 1; }
+.page.active { display: block; }
+
+/* ─── HAMBURGER (mobile) ──────────────────────────────────────────────────── */
+.hamburger {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text);
+  padding: 6px;
+  cursor: pointer;
+}
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  z-index: 99;
+}
+
+/* ─── DASHBOARD CARDS ─────────────────────────────────────────────────────── */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.kpi-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  position: relative;
+  overflow: hidden;
+  transition: transform .15s, box-shadow .15s;
+}
+.kpi-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.kpi-card.green::before { background: var(--green); }
+.kpi-card.yellow::before { background: var(--yellow); }
+.kpi-card.red::before { background: var(--red); }
+.kpi-card.blue::before { background: var(--blue); }
+.kpi-icon {
+  font-size: 1.4rem;
+  margin-bottom: 12px;
+  display: block;
+}
+.kpi-value {
+  font-size: 2.6rem;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 4px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.kpi-card.green .kpi-value { color: var(--green); }
+.kpi-card.yellow .kpi-value { color: var(--yellow); }
+.kpi-card.red .kpi-value { color: var(--red); }
+.kpi-card.blue .kpi-value { color: var(--blue); }
+.kpi-label {
+  font-size: .78rem;
+  color: var(--text2);
+  font-weight: 600;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+
+/* ─── SECTION ─────────────────────────────────────────────────────────────── */
+.section-title {
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.section-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ─── GRID 2 COLS ─────────────────────────────────────────────────────────── */
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+@media (max-width: 900px) { .dash-grid { grid-template-columns: 1fr; } }
+
+/* ─── TABLE CARD ──────────────────────────────────────────────────────────── */
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.card-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+  font-size: .88rem;
+}
+.card-body { padding: 0; }
+
+/* ─── TABLES ──────────────────────────────────────────────────────────────── */
+.tbl { width: 100%; border-collapse: collapse; }
+.tbl th {
+  text-align: left;
+  padding: 10px 16px;
+  font-size: .7rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text3);
+  background: var(--bg3);
+  font-weight: 700;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.tbl td {
+  padding: 11px 16px;
+  font-size: .84rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.tbl tr:last-child td { border-bottom: none; }
+.tbl tbody tr:hover { background: rgba(255,255,255,.02); }
+.tbl .mono { font-family: 'JetBrains Mono', monospace; font-size: .8rem; }
+
+/* ─── BADGE ───────────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.badge-green { background: var(--green-dim); color: var(--green); }
+.badge-yellow { background: var(--yellow-dim); color: var(--yellow); }
+.badge-red { background: var(--red-dim); color: var(--red); }
+.badge-blue { background: var(--blue-dim); color: var(--blue); }
+.badge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* ─── FILTERS BAR ─────────────────────────────────────────────────────────── */
+.filter-bar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  align-items: center;
+}
+.filter-bar input,
+.filter-bar select {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: .82rem;
+  transition: border .15s;
+}
+.filter-bar input:focus,
+.filter-bar select:focus { border-color: var(--accent); }
+.filter-bar input { min-width: 180px; }
+.filter-bar select option { background: var(--bg2); }
+
+/* ─── ACTION BUTTONS ──────────────────────────────────────────────────────── */
+.action-btns { display: flex; gap: 5px; flex-wrap: wrap; }
+.action-btn {
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  font-size: .7rem;
+  font-weight: 700;
+  font-family: 'Syne', sans-serif;
+  border: 1px solid transparent;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.action-btn:hover { transform: translateY(-1px); }
+.ab-green { background: var(--green-dim); color: var(--green); border-color: rgba(34,197,94,.25); }
+.ab-green:hover { background: rgba(34,197,94,.22); }
+.ab-yellow-up { background: rgba(245,158,11,.12); color: #fbbf24; border-color: rgba(245,158,11,.25); }
+.ab-yellow-up:hover { background: rgba(245,158,11,.22); }
+.ab-yellow-dn { background: rgba(234,179,8,.12); color: #eab308; border-color: rgba(234,179,8,.25); }
+.ab-yellow-dn:hover { background: rgba(234,179,8,.22); }
+.ab-red { background: var(--red-dim); color: var(--red); border-color: rgba(239,68,68,.25); }
+.ab-red:hover { background: rgba(239,68,68,.22); }
+.ab-del { background: rgba(100,100,120,.1); color: var(--text3); border-color: rgba(100,100,120,.2); }
+.ab-del:hover { background: rgba(239,68,68,.12); color: var(--red); }
+.ab-blue { background: var(--blue-dim); color: var(--blue); border-color: rgba(59,130,246,.25); }
+.ab-blue:hover { background: rgba(59,130,246,.22); }
+
+/* ─── HISTORIAL ───────────────────────────────────────────────────────────── */
+.mov-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 14px;
+  align-items: start;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  transition: background .1s;
+}
+.mov-item:hover { background: rgba(255,255,255,.02); }
+.mov-item:last-child { border-bottom: none; }
+.mov-icon {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+.mov-info { overflow: hidden; }
+.mov-barril { font-weight: 700; font-size: .88rem; margin-bottom: 2px; }
+.mov-desc { font-size: .78rem; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mov-obs { font-size: .74rem; color: var(--text3); margin-top: 3px; font-style: italic; }
+.mov-time { font-size: .72rem; color: var(--text3); font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
+
+/* ─── MODAL ───────────────────────────────────────────────────────────────── */
+.modal-bg {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.7);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  backdrop-filter: blur(4px);
+}
+.modal-bg.open { display: flex; }
+.modal {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  width: 100%;
+  max-width: 460px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.6);
+  animation: modalIn .2s ease;
+}
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(20px) scale(.97); }
+  to   { opacity: 1; transform: none; }
+}
+.modal-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modal-header h3 { font-size: 1rem; font-weight: 800; }
+.modal-close {
+  background: none;
+  color: var(--text2);
+  font-size: 1.3rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color .1s;
+}
+.modal-close:hover { color: var(--text); }
+.modal-body { padding: 20px 24px; }
+.modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; }
+
+/* FORM */
+.form-row { margin-bottom: 16px; }
+.form-label {
+  display: block;
+  font-size: .75rem;
+  font-weight: 700;
+  color: var(--text2);
+  letter-spacing: .8px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.form-input {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: .88rem;
+  transition: border .15s;
+}
+.form-input:focus { border-color: var(--accent); }
+.form-input::placeholder { color: var(--text3); }
+
+/* ─── TOAST ───────────────────────────────────────────────────────────────── */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  padding: 12px 18px;
+  font-size: .82rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+  animation: toastIn .25s ease;
+  box-shadow: 0 8px 30px rgba(0,0,0,.4);
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: none; }
+}
+.toast-success { border-left: 3px solid var(--green); }
+.toast-error   { border-left: 3px solid var(--red); }
+.toast-info    { border-left: 3px solid var(--blue); }
+
+/* ─── EMPTY STATE ─────────────────────────────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text3);
+}
+.empty-state .big { font-size: 2.5rem; margin-bottom: 12px; }
+.empty-state p { font-size: .88rem; }
+
+/* ─── SCROLLBAR ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* ─── RESPONSIVE ──────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .sidebar {
+    transform: translateX(-100%);
+    width: 240px;
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .main { margin-left: 0; }
+  .hamburger { display: block; }
+  .page { padding: 16px; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .kpi-value { font-size: 2rem; }
+  .topbar { padding: 0 16px; }
+  .action-btns { display: none; }
+  .mobile-actions { display: block !important; }
+  .tbl th:nth-child(4),
+  .tbl td:nth-child(4) { display: none; }
+  .dash-grid { grid-template-columns: 1fr; }
+}
+
+/* Historial page scroll */
+.hist-scroll { max-height: 600px; overflow-y: auto; }
+.table-scroll { overflow-x: auto; }
+
+/* Mobile action dropdown */
+.mobile-actions {
+  display: none;
+  position: relative;
+}
+.mobile-actions-menu {
+  position: absolute;
+  right: 0; top: calc(100% + 4px);
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  z-index: 50;
+  min-width: 180px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  display: none;
+}
+.mobile-actions-menu.open { display: block; }
+.mobile-menu-item {
+  display: block;
+  width: 100%;
+  padding: 11px 16px;
+  text-align: left;
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--text2);
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background .1s;
+  font-family: 'Syne', sans-serif;
+}
+.mobile-menu-item:last-child { border-bottom: none; }
+.mobile-menu-item:hover { background: rgba(255,255,255,.05); color: var(--text); }
+
+/* Confirm dialog override */
+.confirm-highlight { color: var(--accent); font-weight: 700; }
+
+/* Style pill */
+.style-pill {
+  display: inline-block;
+  padding: 3px 9px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  font-size: .74rem;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text2);
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Number barril highlight */
+.num-barril {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: .88rem;
+  color: var(--text);
+}
+
+/* Obs cell */
+.obs-cell {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text3);
+  font-size: .76rem;
+  font-style: italic;
+}
+
+/* Resumen por estilo */
+.estilo-row { display: flex; align-items: center; gap: 12px; padding: 10px 20px; border-bottom: 1px solid var(--border); }
+.estilo-row:last-child { border-bottom: none; }
+.estilo-name { flex: 1; font-weight: 600; font-size: .86rem; }
+.estilo-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.epill {
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: .7rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+}
+.ep-g { background: var(--green-dim); color: var(--green); }
+.ep-y { background: var(--yellow-dim); color: var(--yellow); }
+.ep-r { background: var(--red-dim); color: var(--red); }
+.estilo-total { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--text2); font-size: .84rem; min-width: 24px; text-align: right; }
+
+/* Barril detail modal historial */
+.detail-hist-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: .8rem;
+}
+.detail-hist-item:last-child { border-bottom: none; }
+.dhi-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+.dhi-info { flex: 1; }
+.dhi-cambio { font-weight: 700; }
+.dhi-time { color: var(--text3); font-size: .72rem; font-family: 'JetBrains Mono', monospace; }
+
+/* ─── EGRESO CHECKBOX GRID ────────────────────────────────────────────────── */
+.egreso-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+  padding: 20px;
+}
+.egreso-card {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+  user-select: none;
+}
+.egreso-card:hover { border-color: var(--text3); }
+.egreso-card.selected { border-color: var(--accent); background: rgba(245,158,11,.06); }
+.egreso-card input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; flex-shrink: 0; cursor: pointer; }
+.egreso-card-info { flex: 1; overflow: hidden; }
+.egreso-card-num { font-weight: 700; font-size: .88rem; font-family: 'JetBrains Mono', monospace; }
+.egreso-card-estilo { font-size: .76rem; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.egreso-card-fecha { font-size: .7rem; color: var(--text3); font-family: 'JetBrains Mono', monospace; }
+.badge-gray { background: rgba(148,163,184,.12); color: #94a3b8; }
+.egreso-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg3);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.egreso-toolbar-left { display: flex; align-items: center; gap: 10px; font-size: .84rem; color: var(--text2); }
+.egreso-sel-count { font-weight: 700; color: var(--text); font-family: 'JetBrains Mono', monospace; }
+
+/* Pagination / load more */
+.load-more-btn {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  text-align: center;
+  background: var(--bg3);
+  border: none;
+  color: var(--text2);
+  font-size: .8rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-top: 1px solid var(--border);
+  transition: background .1s, color .1s;
+  font-family: 'Syne', sans-serif;
+}
+.load-more-btn:hover { background: rgba(255,255,255,.04); color: var(--text); }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════ SIDEBAR -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="brand">🍺 BARRILES</div>
+    <div class="brand-sub">Stock Manager v1.0</div>
+  </div>
+  <nav class="nav">
+    <div class="nav-item active" data-page="dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Dashboard
+    </div>
+    <div class="nav-item" data-page="barriles">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+      Barriles
+    </div>
+    <div class="nav-item" data-page="egresos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14l-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 0 8h-1"/></svg>
+      Egresos
+    </div>
+    <div class="nav-item" data-page="historial">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
+      Historial
+    </div>
+  </nav>
+  <div class="sidebar-footer">50L por barril · localStorage</div>
+</aside>
+
+<!-- ═══════════════════════════════════════════════════════════ MAIN -->
+<div class="main">
+  <header class="topbar">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <button class="hamburger" id="hamburger" aria-label="Menú">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <span class="topbar-title" id="topbarTitle">Dashboard</span>
+    </div>
+    <div class="topbar-right">
+      <button class="btn btn-primary" onclick="openModalNuevo()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+        Nuevo Barril
+      </button>
+    </div>
+  </header>
+
+  <!-- ─── PAGE: DASHBOARD ─── -->
+  <div class="page active" id="page-dashboard">
+
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <div class="dash-grid">
+      <!-- Resumen por estilo -->
+      <div>
+        <div class="section-title">Resumen por estilo</div>
+        <div class="card">
+          <div id="estiloResumen"></div>
+        </div>
+      </div>
+      <!-- Últimos movimientos -->
+      <div>
+        <div class="section-title">Últimos movimientos</div>
+        <div class="card">
+          <div id="ultMovimientos" class="hist-scroll"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── PAGE: BARRILES ─── -->
+  <div class="page" id="page-barriles">
+    <div class="filter-bar">
+      <input type="text" id="searchBarril" placeholder="Buscar nº barril..." oninput="renderBarriles()">
+      <select id="filterEstado" onchange="renderBarriles()">
+        <option value="">Todos los estados</option>
+        <option value="lleno_stock">Llenos</option>
+        <option value="pinchado_barra_arriba">Pinchado barra arriba</option>
+        <option value="pinchado_barra_abajo">Pinchado barra abajo</option>
+        <option value="vacio">Vacíos</option>
+      </select>
+      <select id="filterEstilo" onchange="renderBarriles()">
+        <option value="">Todos los estilos</option>
+      </select>
+      <span id="countLabel" style="font-size:.78rem;color:var(--text3);margin-left:auto;font-family:'JetBrains Mono',monospace;"></span>
+    </div>
+    <div class="card">
+      <div class="table-scroll">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>Nº Barril</th>
+              <th>Estilo</th>
+              <th>Estado</th>
+              <th>Ubicación</th>
+              <th>Último cambio</th>
+              <th>Obs.</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="barrilesBody"></tbody>
+        </table>
+      </div>
+      <div id="barrilesEmpty" class="empty-state" style="display:none;">
+        <div class="big">🍺</div>
+        <p>No hay barriles que coincidan con los filtros.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── PAGE: EGRESOS ─── -->
+  <div class="page" id="page-egresos">
+    <!-- Barriles vacíos para egresar -->
+    <div class="section-title" style="margin-bottom:14px;">Barriles vacíos — pendientes de devolución</div>
+    <div class="card" style="margin-bottom:28px;">
+      <div class="egreso-toolbar">
+        <div class="egreso-toolbar-left">
+          <span id="egresoSelLabel"><span class="egreso-sel-count" id="egresoSelCount">0</span> seleccionados</span>
+          <button class="btn btn-ghost btn-sm" onclick="toggleSelTodos()">Sel. todos</button>
+        </div>
+        <button class="btn btn-primary" id="btnRegistrarEgreso" onclick="abrirModalEgreso()" disabled style="opacity:.5;cursor:not-allowed;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 14l-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 0 8h-1"/></svg>
+          Registrar Devolución
+        </button>
+      </div>
+      <div id="egresoGrid" class="egreso-grid"></div>
+      <div id="egresoVacioEmpty" class="empty-state" style="display:none;">
+        <div class="big">✅</div>
+        <p>No hay barriles vacíos pendientes de devolución.</p>
+      </div>
+    </div>
+
+    <!-- Historial de egresos -->
+    <div class="section-title" style="margin-bottom:14px;">Historial de devoluciones</div>
+    <div class="card">
+      <div id="egresoHistList" class="hist-scroll"></div>
+    </div>
+  </div>
+
+  <!-- ─── PAGE: HISTORIAL ─── -->
+  <div class="page" id="page-historial">
+    <div class="filter-bar">
+      <input type="text" id="searchHistBarril" placeholder="Filtrar por nº barril..." oninput="renderHistorial()">
+      <select id="filterHistEstado" onchange="renderHistorial()">
+        <option value="">Todos los estados</option>
+        <option value="lleno_stock">→ Lleno</option>
+        <option value="pinchado_barra_arriba">→ Pinchado arriba</option>
+        <option value="pinchado_barra_abajo">→ Pinchado abajo</option>
+        <option value="vacio">→ Vacío</option>
+      </select>
+    </div>
+    <div class="card">
+      <div id="historialList" class="hist-scroll"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ MODAL NUEVO BARRIL -->
+<div class="modal-bg" id="modalNuevo">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>➕ Nuevo Barril</h3>
+      <button class="modal-close" onclick="closeModal('modalNuevo')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label class="form-label">Número de barril *</label>
+        <input class="form-input" id="nNúmero" type="text" placeholder="ej: 42">
+      </div>
+      <div class="form-row">
+        <label class="form-label">Estilo de cerveza *</label>
+        <select class="form-input" id="nEstilo" onchange="toggleEstiloOtro()">
+          <option value="">— Seleccioná un estilo —</option>
+          <option value="Praha">Praha</option>
+          <option value="Ryle Pale">Ryle Pale</option>
+          <option value="King Bee">King Bee</option>
+          <option value="Mesopotamia">Mesopotamia</option>
+          <option value="Silesia">Silesia</option>
+          <option value="Good Devil">Good Devil</option>
+          <option value="Hellfish">Hellfish</option>
+          <option value="Hodgson">Hodgson</option>
+          <option value="Moravia">Moravia</option>
+          <option value="Cotton Field">Cotton Field</option>
+          <option value="Street Rules">Street Rules</option>
+          <option value="__otro__">Otro...</option>
+        </select>
+      </div>
+      <div class="form-row" id="rowEstiloOtro" style="display:none;">
+        <label class="form-label">Nombre del estilo *</label>
+        <input class="form-input" id="nEstiloOtro" type="text" placeholder="Escribí el nombre del estilo">
+      </div>
+      <div class="form-row">
+        <label class="form-label">Estado inicial</label>
+        <select class="form-input" id="nEstado">
+          <option value="lleno_stock">Lleno (en stock)</option>
+          <option value="pinchado_barra_arriba">Pinchado barra arriba</option>
+          <option value="pinchado_barra_abajo">Pinchado barra abajo</option>
+          <option value="vacio">Vacío</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Observaciones</label>
+        <input class="form-input" id="nObs" type="text" placeholder="Opcional">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalNuevo')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarNuevoBarril()">Agregar Barril</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ MODAL OBSERVACION -->
+<div class="modal-bg" id="modalObs">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modalObsTitle">Cambiar estado</h3>
+      <button class="modal-close" onclick="closeModal('modalObs')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="modalObsDesc" style="color:var(--text2);font-size:.88rem;margin-bottom:16px;"></div>
+      <div class="form-row">
+        <label class="form-label">Observación (opcional)</label>
+        <input class="form-input" id="obsInput" type="text" placeholder="ej: barril dañado, cambio de turno...">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalObs')">Cancelar</button>
+      <button class="btn btn-primary" id="modalObsConfirm">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ MODAL EGRESO -->
+<div class="modal-bg" id="modalEgreso">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>↩️ Registrar Devolución</h3>
+      <button class="modal-close" onclick="closeModal('modalEgreso')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="modalEgresoDesc" style="color:var(--text2);font-size:.88rem;margin-bottom:16px;"></div>
+      <div class="form-row">
+        <label class="form-label">Observación (opcional)</label>
+        <input class="form-input" id="egresoObsInput" type="text" placeholder="ej: devolución semanal, proveedor Fulano...">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalEgreso')">Cancelar</button>
+      <button class="btn btn-primary" id="modalEgresoConfirm">Confirmar Devolución</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ MODAL DETALLE BARRIL -->
+<div class="modal-bg" id="modalDetalle">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <h3 id="modalDetTitle">Barril #XX</h3>
+      <button class="modal-close" onclick="closeModal('modalDetalle')">✕</button>
+    </div>
+    <div class="modal-body" id="modalDetBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalDetalle')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ MODAL EDITAR BARRIL -->
+<div class="modal-bg" id="modalEditar">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>✏️ Editar Barril</h3>
+      <button class="modal-close" onclick="closeModal('modalEditar')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label class="form-label">Número de barril *</label>
+        <input class="form-input" id="eNumero" type="text" placeholder="ej: 42">
+      </div>
+      <div class="form-row">
+        <label class="form-label">Estilo de cerveza *</label>
+        <select class="form-input" id="eEstilo">
+          <option value="">— Seleccioná un estilo —</option>
+          <option value="Praha">Praha</option>
+          <option value="Ryle Pale">Ryle Pale</option>
+          <option value="King Bee">King Bee</option>
+          <option value="Mesopotamia">Mesopotamia</option>
+          <option value="Silesia">Silesia</option>
+          <option value="Good Devil">Good Devil</option>
+          <option value="Hellfish">Hellfish</option>
+          <option value="Hodgson">Hodgson</option>
+          <option value="Moravia">Moravia</option>
+          <option value="Cotton Field">Cotton Field</option>
+          <option value="Street Rules">Street Rules</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Estado</label>
+        <select class="form-input" id="eEstado">
+          <option value="lleno_stock">Lleno (en stock)</option>
+          <option value="pinchado_barra_arriba">Pinchado barra arriba</option>
+          <option value="pinchado_barra_abajo">Pinchado barra abajo</option>
+          <option value="vacio">Vacío</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Observaciones</label>
+        <input class="form-input" id="eObs" type="text" placeholder="Opcional">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalEditar')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarEdicion()">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ═══════════════════════════════════════════════════════════ JAVASCRIPT -->
+<script>
+// ─── CONSTANTES ─────────────────────────────────────────────────────────────
+const ESTADOS = {
+  lleno_stock:           { label: 'Lleno',           badgeClass: 'badge-green',  color: 'green',  icon: '🟢' },
+  pinchado_barra_arriba: { label: 'Barra Arriba',    badgeClass: 'badge-yellow', color: 'yellow', icon: '🟡' },
+  pinchado_barra_abajo:  { label: 'Barra Abajo',     badgeClass: 'badge-yellow', color: 'yellow', icon: '🟡' },
+  vacio:                 { label: 'Vacío',            badgeClass: 'badge-red',   color: 'red',    icon: '🔴' },
+  egresado:              { label: 'Devuelto',         badgeClass: 'badge-gray',  color: 'gray',   icon: '↩️' }
+};
+
+const UBICACION_MAP = {
+  lleno_stock:           'deposito',
+  pinchado_barra_arriba: 'barra_arriba',
+  pinchado_barra_abajo:  'barra_abajo',
+  vacio:                 'sector_vacios',
+  egresado:              'devuelto_proveedor'
+};
+
+const UBICACION_LABELS = {
+  deposito:              'Depósito',
+  barra_arriba:          'Barra Arriba',
+  barra_abajo:           'Barra Abajo',
+  sector_vacios:         'Sector Vacíos',
+  devuelto_proveedor:    'Devuelto al proveedor'
+};
+
+const PAGE_TITLES = {
+  dashboard: 'Dashboard',
+  barriles:  'Barriles',
+  egresos:   'Egresos',
+  historial: 'Historial'
+};
+
+// ─── STOCK INICIAL ────────────────────────────────────────────────────────────
+const DATOS_PRUEBA = [
+  // LLENOS EN STOCK
+  { numero: '72',  estilo: 'Hellfish',   estado: 'lleno_stock' },
+  { numero: '448', estilo: 'Hellfish',   estado: 'lleno_stock' },
+  { numero: '229', estilo: 'Good Devil', estado: 'lleno_stock' },
+  { numero: '267', estilo: 'Good Devil', estado: 'lleno_stock' },
+  { numero: '157', estilo: 'Ryle Pale',  estado: 'lleno_stock' },
+  { numero: '233', estilo: 'Ryle Pale',  estado: 'lleno_stock' },
+  { numero: '105', estilo: 'Ryle Pale',  estado: 'lleno_stock' },
+  { numero: '495', estilo: 'Ryle Pale',  estado: 'lleno_stock' },
+  { numero: '437', estilo: 'King Bee',   estado: 'lleno_stock' },
+  { numero: '291', estilo: 'King Bee',   estado: 'lleno_stock' },
+  { numero: '82',  estilo: 'Hodgson',    estado: 'lleno_stock' },
+  { numero: '147', estilo: 'Hodgson',    estado: 'lleno_stock' },
+  { numero: '336', estilo: 'Praha',      estado: 'lleno_stock' },
+  // VACÍOS
+  { numero: '288', estilo: 'King Bee',   estado: 'vacio' },
+  { numero: '481', estilo: 'Hellfish',   estado: 'vacio' },
+  { numero: '148', estilo: 'Hellfish',   estado: 'vacio' },
+  { numero: '35',  estilo: 'Good Devil', estado: 'vacio' },
+  { numero: '210', estilo: 'Good Devil', estado: 'vacio' },
+  { numero: '64',  estilo: 'Hodgson',    estado: 'vacio' },
+  { numero: '69',  estilo: 'Hodgson',    estado: 'vacio' },
+  { numero: '203', estilo: 'Hodgson',    estado: 'vacio' },
+  { numero: '380', estilo: 'Ryle Pale',  estado: 'vacio' },
+  { numero: '282', estilo: 'Praha',      estado: 'vacio' },
+  // PINCHADO BARRA ABAJO
+  { numero: '121', estilo: 'Ryle Pale',  estado: 'pinchado_barra_abajo' },
+  { numero: '417', estilo: 'King Bee',   estado: 'pinchado_barra_abajo' },
+  { numero: '378', estilo: 'Hodgson',    estado: 'pinchado_barra_abajo' },
+  { numero: '296', estilo: 'Praha',      estado: 'pinchado_barra_abajo' },
+  { numero: '174', estilo: 'Praha',      estado: 'pinchado_barra_abajo' }, // ojo: también listado en barra arriba, se cargó en barra abajo
+  { numero: '323', estilo: 'Hellfish',   estado: 'pinchado_barra_abajo' },
+  { numero: '207', estilo: 'Good Devil', estado: 'pinchado_barra_abajo' },
+  { numero: '420', estilo: 'Moravia',    estado: 'pinchado_barra_abajo' }, // ojo: también listado en barra arriba, se cargó en barra abajo
+  // PINCHADO BARRA ARRIBA
+  { numero: '388', estilo: 'Ryle Pale',  estado: 'pinchado_barra_arriba' },
+  { numero: '180', estilo: 'King Bee',   estado: 'pinchado_barra_arriba' },
+  { numero: '243', estilo: 'Hodgson',    estado: 'pinchado_barra_arriba' },
+  { numero: '227', estilo: 'Hellfish',   estado: 'pinchado_barra_arriba' },
+  { numero: '347', estilo: 'Good Devil', estado: 'pinchado_barra_arriba' },
+];
+
+// ─── STORAGE ─────────────────────────────────────────────────────────────────
+let barriles   = [];
+let movimientos = [];
+
+function cargarDatos() {
+  try {
+    const b = localStorage.getItem('barriles_v1');
+    const m = localStorage.getItem('movimientos_v1');
+    barriles    = b ? JSON.parse(b) : [];
+    movimientos = m ? JSON.parse(m) : [];
+  } catch(e) {
+    barriles = []; movimientos = [];
+  }
+
+  if (barriles.length === 0) {
+    // Cargar datos de prueba
+    DATOS_PRUEBA.forEach(d => {
+      const id = genId();
+      const estado = d.estado;
+      const ubicacion = UBICACION_MAP[estado];
+      const now = new Date().toISOString();
+      barriles.push({
+        id, numero_barril: d.numero, estilo: d.estilo,
+        estado_actual: estado, ubicacion_actual: ubicacion,
+        fecha_ultimo_cambio: now, observaciones: ''
+      });
+      movimientos.push({
+        id_movimiento: genId(), id_barril: id,
+        fecha_hora: now,
+        estado_anterior: null, estado_nuevo: estado,
+        ubicacion_anterior: null, ubicacion_nueva: ubicacion,
+        observacion: 'Carga inicial de datos de prueba'
+      });
+    });
+    guardarDatos();
+  }
+}
+
+function guardarDatos() {
+  localStorage.setItem('barriles_v1',    JSON.stringify(barriles));
+  localStorage.setItem('movimientos_v1', JSON.stringify(movimientos));
+}
+
+function genId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+// ─── NAVEGACIÓN ───────────────────────────────────────────────────────────────
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    const page = item.dataset.page;
+    navigateTo(page);
+    closeSidebar();
+  });
+});
+
+function navigateTo(page) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === page));
+  document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + page));
+  document.getElementById('topbarTitle').textContent = PAGE_TITLES[page] || page;
+
+  if (page === 'dashboard') renderDashboard();
+  if (page === 'barriles')  { renderEstilosFilter(); renderBarriles(); }
+  if (page === 'egresos')   renderEgresos();
+  if (page === 'historial') renderHistorial();
+}
+
+// ─── SIDEBAR MOBILE ──────────────────────────────────────────────────────────
+document.getElementById('hamburger').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('open');
+});
+document.getElementById('sidebarOverlay').addEventListener('click', closeSidebar);
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('open');
+}
+
+// ─── DASHBOARD ────────────────────────────────────────────────────────────────
+function renderDashboard() {
+  // KPIs (excluye egresados del stock activo)
+  const stock    = barriles.filter(b => b.estado_actual !== 'egresado');
+  const llenos   = stock.filter(b => b.estado_actual === 'lleno_stock').length;
+  const arr      = stock.filter(b => b.estado_actual === 'pinchado_barra_arriba').length;
+  const abj      = stock.filter(b => b.estado_actual === 'pinchado_barra_abajo').length;
+  const vacios   = stock.filter(b => b.estado_actual === 'vacio').length;
+  const total    = stock.length;
+
+  document.getElementById('kpiGrid').innerHTML = `
+    <div class="kpi-card green">
+      <span class="kpi-icon">🟢</span>
+      <div class="kpi-value">${llenos}</div>
+      <div class="kpi-label">Barriles Llenos</div>
+    </div>
+    <div class="kpi-card yellow">
+      <span class="kpi-icon">⬆️</span>
+      <div class="kpi-value">${arr}</div>
+      <div class="kpi-label">Barra Arriba</div>
+    </div>
+    <div class="kpi-card yellow" style="--yellow:#eab308;--yellow-dim:rgba(234,179,8,.12)">
+      <span class="kpi-icon">⬇️</span>
+      <div class="kpi-value" style="color:#eab308">${abj}</div>
+      <div class="kpi-label">Barra Abajo</div>
+    </div>
+    <div class="kpi-card red">
+      <span class="kpi-icon">🔴</span>
+      <div class="kpi-value">${vacios}</div>
+      <div class="kpi-label">Vacíos</div>
+    </div>
+    <div class="kpi-card blue">
+      <span class="kpi-icon">🍺</span>
+      <div class="kpi-value">${total}</div>
+      <div class="kpi-label">Total Barriles</div>
+    </div>
+  `;
+
+  // Resumen por estilo (excluye egresados)
+  const estilosMap = {};
+  stock.forEach(b => {
+    if (!estilosMap[b.estilo]) estilosMap[b.estilo] = { lleno: 0, pinchado: 0, vacio: 0 };
+    if (b.estado_actual === 'lleno_stock') estilosMap[b.estilo].lleno++;
+    else if (b.estado_actual === 'vacio') estilosMap[b.estilo].vacio++;
+    else estilosMap[b.estilo].pinchado++;
+  });
+
+  const estilosHTML = Object.entries(estilosMap)
+    .sort((a,b) => (b[1].lleno+b[1].pinchado+b[1].vacio) - (a[1].lleno+a[1].pinchado+a[1].vacio))
+    .map(([estilo, counts]) => {
+      const total = counts.lleno + counts.pinchado + counts.vacio;
+      const pills = [
+        counts.lleno   ? `<span class="epill ep-g">${counts.lleno} lleno${counts.lleno>1?'s':''}</span>` : '',
+        counts.pinchado ? `<span class="epill ep-y">${counts.pinchado} pinchadx</span>` : '',
+        counts.vacio   ? `<span class="epill ep-r">${counts.vacio} vacío${counts.vacio>1?'s':''}</span>` : ''
+      ].filter(Boolean).join('');
+      return `
+        <div class="estilo-row">
+          <div class="estilo-name">${esc(estilo)}</div>
+          <div class="estilo-pills">${pills}</div>
+          <div class="estilo-total">${total}</div>
+        </div>`;
+    }).join('');
+
+  document.getElementById('estiloResumen').innerHTML = estilosHTML ||
+    '<div class="empty-state"><p>Sin barriles registrados</p></div>';
+
+  // Últimos movimientos
+  const ultimos = [...movimientos]
+    .sort((a,b) => new Date(b.fecha_hora) - new Date(a.fecha_hora))
+    .slice(0, 12);
+
+  document.getElementById('ultMovimientos').innerHTML = ultimos.length
+    ? ultimos.map(m => renderMovItem(m)).join('')
+    : '<div class="empty-state"><p>Sin movimientos aún</p></div>';
+}
+
+// ─── TABLA BARRILES ───────────────────────────────────────────────────────────
+function renderEstilosFilter() {
+  const estilos = [...new Set(barriles.filter(b => b.estado_actual !== 'egresado').map(b => b.estilo))].sort();
+  const sel = document.getElementById('filterEstilo');
+  const val = sel.value;
+  sel.innerHTML = '<option value="">Todos los estilos</option>' +
+    estilos.map(e => `<option value="${esc(e)}" ${val===e?'selected':''}>${esc(e)}</option>`).join('');
+}
+
+function renderBarriles() {
+  const q      = document.getElementById('searchBarril').value.trim().toLowerCase();
+  const estado = document.getElementById('filterEstado').value;
+  const estilo = document.getElementById('filterEstilo').value;
+
+  let filtered = barriles.filter(b => {
+    if (b.estado_actual === 'egresado') return false;
+    if (q && !b.numero_barril.toLowerCase().includes(q)) return false;
+    if (estado && b.estado_actual !== estado) return false;
+    if (estilo && b.estilo !== estilo) return false;
+    return true;
+  }).sort((a,b) => a.numero_barril.localeCompare(b.numero_barril, undefined, {numeric: true}));
+
+  document.getElementById('countLabel').textContent = `${filtered.length} / ${barriles.length} barriles`;
+
+  const tbody = document.getElementById('barrilesBody');
+  tbody.innerHTML = filtered.map(b => {
+    const est = ESTADOS[b.estado_actual];
+    const fechaStr = formatFecha(b.fecha_ultimo_cambio);
+    return `<tr>
+      <td><span class="num-barril">#${esc(b.numero_barril)}</span></td>
+      <td><span class="style-pill" title="${esc(b.estilo)}">${esc(b.estilo)}</span></td>
+      <td><span class="badge ${est.badgeClass}"><span class="badge-dot"></span>${est.label}</span></td>
+      <td><span style="font-size:.78rem;color:var(--text2);">${UBICACION_LABELS[b.ubicacion_actual]||b.ubicacion_actual}</span></td>
+      <td class="mono" style="color:var(--text3);font-size:.76rem;">${fechaStr}</td>
+      <td class="obs-cell" title="${esc(b.observaciones||'')}">${esc(b.observaciones||'—')}</td>
+      <td>
+        <div class="action-btns">
+          ${b.estado_actual !== 'lleno_stock'           ? `<button class="action-btn ab-green"     onclick="cambiarEstado('${b.id}','lleno_stock')">✅ Lleno</button>` : ''}
+          ${b.estado_actual !== 'pinchado_barra_arriba' ? `<button class="action-btn ab-yellow-up"  onclick="cambiarEstado('${b.id}','pinchado_barra_arriba')">⬆️ Barra Arriba</button>` : ''}
+          ${b.estado_actual !== 'pinchado_barra_abajo'  ? `<button class="action-btn ab-yellow-dn"  onclick="cambiarEstado('${b.id}','pinchado_barra_abajo')">⬇️ Barra Abajo</button>` : ''}
+          ${b.estado_actual !== 'vacio'                 ? `<button class="action-btn ab-red"        onclick="cambiarEstado('${b.id}','vacio')">🔴 Vacío</button>` : ''}
+          <button class="action-btn ab-del"  title="Información" onclick="verDetalle('${b.id}')">📋</button>
+          <button class="action-btn ab-blue" title="Editar"       onclick="editarBarril('${b.id}')">✏️</button>
+          <button class="action-btn ab-del"  title="Eliminar"     onclick="confirmarEliminar('${b.id}')">🗑</button>
+        </div>
+        <!-- Mobile -->
+        <div class="mobile-actions" id="mob_${b.id}">
+          <button class="action-btn ab-del btn-sm" onclick="toggleMobileMenu('${b.id}')">Acciones ▾</button>
+          <div class="mobile-actions-menu" id="mobmenu_${b.id}">
+            ${b.estado_actual !== 'lleno_stock'           ? `<button class="mobile-menu-item" onclick="cambiarEstado('${b.id}','lleno_stock');toggleMobileMenu('${b.id}')">✅ Marcar como Lleno</button>` : ''}
+            ${b.estado_actual !== 'pinchado_barra_arriba' ? `<button class="mobile-menu-item" onclick="cambiarEstado('${b.id}','pinchado_barra_arriba');toggleMobileMenu('${b.id}')">⬆️ Pinchar Barra Arriba</button>` : ''}
+            ${b.estado_actual !== 'pinchado_barra_abajo'  ? `<button class="mobile-menu-item" onclick="cambiarEstado('${b.id}','pinchado_barra_abajo');toggleMobileMenu('${b.id}')">⬇️ Pinchar Barra Abajo</button>` : ''}
+            ${b.estado_actual !== 'vacio'                 ? `<button class="mobile-menu-item" onclick="cambiarEstado('${b.id}','vacio');toggleMobileMenu('${b.id}')">🔴 Marcar Vacío</button>` : ''}
+            <button class="mobile-menu-item" onclick="verDetalle('${b.id}');toggleMobileMenu('${b.id}')">📋 Ver historial</button>
+            <button class="mobile-menu-item" onclick="editarBarril('${b.id}');toggleMobileMenu('${b.id}')">✏️ Editar</button>
+            <button class="mobile-menu-item" style="color:var(--red)" onclick="confirmarEliminar('${b.id}')">🗑 Eliminar</button>
+          </div>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('barrilesEmpty').style.display = filtered.length ? 'none' : 'block';
+}
+
+function toggleMobileMenu(id) {
+  const menu = document.getElementById('mobmenu_' + id);
+  menu.classList.toggle('open');
+}
+
+// ─── HISTORIAL ────────────────────────────────────────────────────────────────
+const HIST_PAGE_SIZE = 30;
+let histOffset = 0;
+
+function renderHistorial(reset = true) {
+  if (reset) histOffset = 0;
+  const q     = document.getElementById('searchHistBarril').value.trim().toLowerCase();
+  const ests  = document.getElementById('filterHistEstado').value;
+
+  let filtered = movimientos.filter(m => {
+    const b = barriles.find(x => x.id === m.id_barril);
+    const num = b ? b.numero_barril.toLowerCase() : '';
+    if (q && !num.includes(q)) return false;
+    if (ests && m.estado_nuevo !== ests) return false;
+    return true;
+  }).sort((a,b) => new Date(b.fecha_hora) - new Date(a.fecha_hora));
+
+  const page = filtered.slice(0, histOffset + HIST_PAGE_SIZE);
+  const hasMore = filtered.length > page.length;
+
+  const html = page.map(m => renderMovItem(m, true)).join('');
+  document.getElementById('historialList').innerHTML = html
+    ? html + (hasMore ? `<button class="load-more-btn" onclick="loadMoreHist()">Cargar más (${filtered.length - page.length} restantes)</button>` : '')
+    : '<div class="empty-state"><div class="big">📋</div><p>Sin movimientos registrados aún</p></div>';
+}
+
+function loadMoreHist() {
+  histOffset += HIST_PAGE_SIZE;
+  renderHistorial(false);
+}
+
+// ─── RENDER MOV ITEM ──────────────────────────────────────────────────────────
+function renderMovItem(m, showFull = false) {
+  const barril = barriles.find(b => b.id === m.id_barril);
+  const numStr = barril ? `#${barril.numero_barril}` : '#???';
+  const estiloStr = barril ? ` · ${barril.estilo}` : '';
+  const est = ESTADOS[m.estado_nuevo] || { label: m.estado_nuevo, color: 'blue' };
+  const colorMap = { green: '#22c55e', yellow: '#f59e0b', red: '#ef4444', blue: '#3b82f6', gray: '#94a3b8' };
+  const col = colorMap[est.color] || '#3b82f6';
+
+  const anterior = m.estado_anterior ? (ESTADOS[m.estado_anterior]?.label || m.estado_anterior) : '—';
+  const nuevo    = est.label;
+  const desc = m.estado_anterior
+    ? `${anterior} → ${nuevo}`
+    : `Registro inicial: ${nuevo}`;
+
+  return `<div class="mov-item">
+    <div class="mov-icon" style="background:${col}22;color:${col};">${est.icon || '↻'}</div>
+    <div class="mov-info">
+      <div class="mov-barril">${numStr}${showFull ? `<span style="font-weight:400;color:var(--text3);font-size:.8rem;">${esc(estiloStr)}</span>` : ''}</div>
+      <div class="mov-desc">${desc}</div>
+      ${m.observacion ? `<div class="mov-obs">${esc(m.observacion)}</div>` : ''}
+    </div>
+    <div class="mov-time">${formatFecha(m.fecha_hora)}</div>
+  </div>`;
+}
+
+// ─── ACCIONES DE BARRIL ───────────────────────────────────────────────────────
+let pendingAction = null;
+
+function cambiarEstado(id, nuevoEstado) {
+  const barril = barriles.find(b => b.id === id);
+  if (!barril) return;
+
+  const est = ESTADOS[nuevoEstado];
+  const modal = document.getElementById('modalObs');
+  document.getElementById('modalObsTitle').textContent = `Cambiar estado → ${est.label}`;
+  document.getElementById('modalObsDesc').innerHTML = `
+    Barril <strong class="confirm-highlight">#${esc(barril.numero_barril)}</strong> · ${esc(barril.estilo)}<br>
+    <span style="color:var(--text3);font-size:.82rem;">${ESTADOS[barril.estado_actual]?.label} → <strong style="color:var(--text)">${est.label}</strong></span>
+  `;
+  document.getElementById('obsInput').value = '';
+  document.getElementById('modalObsConfirm').onclick = () => ejecutarCambio(id, nuevoEstado);
+  modal.classList.add('open');
+  document.getElementById('obsInput').focus();
+}
+
+function ejecutarCambio(id, nuevoEstado) {
+  const barril = barriles.find(b => b.id === id);
+  if (!barril) return;
+
+  const obs = document.getElementById('obsInput').value.trim();
+  const now = new Date().toISOString();
+  const nuevaUbic = UBICACION_MAP[nuevoEstado];
+
+  movimientos.push({
+    id_movimiento:       genId(),
+    id_barril:           id,
+    fecha_hora:          now,
+    estado_anterior:     barril.estado_actual,
+    estado_nuevo:        nuevoEstado,
+    ubicacion_anterior:  barril.ubicacion_actual,
+    ubicacion_nueva:     nuevaUbic,
+    observacion:         obs
+  });
+
+  barril.estado_actual    = nuevoEstado;
+  barril.ubicacion_actual = nuevaUbic;
+  barril.fecha_ultimo_cambio = now;
+  barril.observaciones    = obs || barril.observaciones;
+
+  guardarDatos();
+  closeModal('modalObs');
+  toast(`Barril #${barril.numero_barril} → ${ESTADOS[nuevoEstado].label}`, 'success');
+
+  // Refresh active page
+  refreshCurrentPage();
+}
+
+// ─── NUEVO BARRIL ─────────────────────────────────────────────────────────────
+function toggleEstiloOtro() {
+  const sel = document.getElementById('nEstilo');
+  const row = document.getElementById('rowEstiloOtro');
+  const input = document.getElementById('nEstiloOtro');
+  const esOtro = sel.value === '__otro__';
+  row.style.display = esOtro ? 'block' : 'none';
+  if (esOtro) { input.value = ''; input.focus(); }
+}
+
+function openModalNuevo() {
+  document.getElementById('nNúmero').value    = '';
+  document.getElementById('nEstilo').value    = '';
+  document.getElementById('nEstiloOtro').value = '';
+  document.getElementById('rowEstiloOtro').style.display = 'none';
+  document.getElementById('nEstado').value    = 'lleno_stock';
+  document.getElementById('nObs').value       = '';
+  document.getElementById('modalNuevo').classList.add('open');
+  document.getElementById('nNúmero').focus();
+}
+
+function guardarNuevoBarril() {
+  const numero = document.getElementById('nNúmero').value.trim();
+  const selVal = document.getElementById('nEstilo').value;
+  const estilo = selVal === '__otro__'
+    ? document.getElementById('nEstiloOtro').value.trim()
+    : selVal;
+  const estado = document.getElementById('nEstado').value;
+  const obs    = document.getElementById('nObs').value.trim();
+
+  if (!numero) { toast('Ingresá el número de barril', 'error'); return; }
+  if (!estilo)  { toast('Seleccioná o escribí el estilo de cerveza', 'error'); return; }
+  if (barriles.find(b => b.numero_barril.toLowerCase() === numero.toLowerCase())) {
+    toast(`El barril #${numero} ya existe`, 'error'); return;
+  }
+
+  const id   = genId();
+  const ubic = UBICACION_MAP[estado];
+  const now  = new Date().toISOString();
+
+  barriles.push({
+    id, numero_barril: numero, estilo,
+    estado_actual: estado, ubicacion_actual: ubic,
+    fecha_ultimo_cambio: now, observaciones: obs
+  });
+  movimientos.push({
+    id_movimiento: genId(), id_barril: id, fecha_hora: now,
+    estado_anterior: null, estado_nuevo: estado,
+    ubicacion_anterior: null, ubicacion_nueva: ubic,
+    observacion: obs || 'Barril agregado'
+  });
+
+  guardarDatos();
+  closeModal('modalNuevo');
+  toast(`Barril #${numero} agregado correctamente`, 'success');
+  refreshCurrentPage();
+
+  // Actualizar filtro estilos
+  renderEstilosFilter();
+}
+
+// ─── EDITAR BARRIL ────────────────────────────────────────────────────────────
+let editandoId = null;
+
+function editarBarril(id) {
+  const barril = barriles.find(b => b.id === id);
+  if (!barril) return;
+  editandoId = id;
+
+  document.getElementById('eNumero').value = barril.numero_barril;
+  document.getElementById('eEstado').value  = barril.estado_actual;
+  document.getElementById('eObs').value     = barril.observaciones || '';
+
+  const selEstilo = document.getElementById('eEstilo');
+  const opcionExiste = [...selEstilo.options].some(o => o.value === barril.estilo);
+  if (opcionExiste) {
+    selEstilo.value = barril.estilo;
+  } else {
+    // Si el estilo no está en la lista, agregar temporalmente
+    const opt = document.createElement('option');
+    opt.value = barril.estilo; opt.textContent = barril.estilo;
+    selEstilo.appendChild(opt);
+    selEstilo.value = barril.estilo;
+  }
+
+  document.getElementById('modalEditar').classList.add('open');
+}
+
+function guardarEdicion() {
+  const barril = barriles.find(b => b.id === editandoId);
+  if (!barril) return;
+
+  const numero = document.getElementById('eNumero').value.trim();
+  const estilo = document.getElementById('eEstilo').value;
+  const estado = document.getElementById('eEstado').value;
+  const obs    = document.getElementById('eObs').value.trim();
+
+  if (!numero) { toast('Ingresá el número de barril', 'error'); return; }
+  if (!estilo)  { toast('Seleccioná el estilo', 'error'); return; }
+
+  // Verificar duplicado de número (excluyendo el barril actual)
+  if (barriles.find(b => b.id !== editandoId && b.numero_barril.toLowerCase() === numero.toLowerCase())) {
+    toast(`El barril #${numero} ya existe`, 'error'); return;
+  }
+
+  const estadoCambio = estado !== barril.estado_actual;
+  const now = new Date().toISOString();
+
+  if (estadoCambio) {
+    movimientos.push({
+      id_movimiento: genId(),
+      id_barril: barril.id,
+      estado_anterior: barril.estado_actual,
+      estado_nuevo: estado,
+      fecha_hora: now,
+      observaciones: obs || 'Edición manual'
+    });
+  }
+
+  barril.numero_barril      = numero;
+  barril.estilo             = estilo;
+  barril.estado_actual      = estado;
+  barril.ubicacion_actual   = UBICACION_MAP[estado];
+  barril.observaciones      = obs;
+  if (estadoCambio) barril.fecha_ultimo_cambio = now;
+
+  guardarDatos();
+  closeModal('modalEditar');
+  toast(`Barril #${numero} actualizado`, 'success');
+
+  const active = document.querySelector('.page.active');
+  if (active) {
+    const id = active.id.replace('page-', '');
+    if (id === 'barriles') { renderEstilosFilter(); renderBarriles(); }
+    else if (id === 'dashboard') renderDashboard();
+  }
+}
+
+// ─── ELIMINAR ─────────────────────────────────────────────────────────────────
+function confirmarEliminar(id) {
+  const barril = barriles.find(b => b.id === id);
+  if (!barril) return;
+  if (!confirm(`¿Eliminar el barril #${barril.numero_barril} (${barril.estilo}) definitivamente?\n\nSu historial también será eliminado.`)) return;
+  barriles    = barriles.filter(b => b.id !== id);
+  movimientos = movimientos.filter(m => m.id_barril !== id);
+  guardarDatos();
+  toast(`Barril #${barril.numero_barril} eliminado`, 'info');
+  refreshCurrentPage();
+}
+
+// ─── DETALLE BARRIL ───────────────────────────────────────────────────────────
+function verDetalle(id) {
+  const barril = barriles.find(b => b.id === id);
+  if (!barril) return;
+  const hist = movimientos
+    .filter(m => m.id_barril === id)
+    .sort((a,b) => new Date(b.fecha_hora) - new Date(a.fecha_hora));
+
+  const est = ESTADOS[barril.estado_actual];
+  document.getElementById('modalDetTitle').textContent = `Barril #${barril.numero_barril} · ${barril.estilo}`;
+
+  const colorMap = { green: '#22c55e', yellow: '#f59e0b', red: '#ef4444', blue: '#3b82f6', gray: '#94a3b8' };
+  const histHTML = hist.map(m => {
+    const e = ESTADOS[m.estado_nuevo];
+    const col = colorMap[e?.color] || '#3b82f6';
+    const anterior = m.estado_anterior ? (ESTADOS[m.estado_anterior]?.label || m.estado_anterior) : null;
+    return `<div class="detail-hist-item">
+      <div class="dhi-dot" style="background:${col}"></div>
+      <div class="dhi-info">
+        <div class="dhi-cambio">${anterior ? `${anterior} → ` : 'Inicial: '}<strong>${e?.label || m.estado_nuevo}</strong></div>
+        ${m.observacion ? `<div style="color:var(--text3);font-size:.76rem;font-style:italic;">${esc(m.observacion)}</div>` : ''}
+      </div>
+      <div class="dhi-time">${formatFecha(m.fecha_hora)}</div>
+    </div>`;
+  }).join('') || '<p style="color:var(--text3);font-size:.84rem;">Sin movimientos</p>';
+
+  document.getElementById('modalDetBody').innerHTML = `
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">
+      <div style="flex:1;min-width:140px;">
+        <div style="font-size:.7rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Estado</div>
+        <span class="badge ${est.badgeClass}"><span class="badge-dot"></span>${est.label}</span>
+      </div>
+      <div style="flex:1;min-width:140px;">
+        <div style="font-size:.7rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Ubicación</div>
+        <span style="font-size:.86rem;">${UBICACION_LABELS[barril.ubicacion_actual]||barril.ubicacion_actual}</span>
+      </div>
+      <div style="flex:1;min-width:140px;">
+        <div style="font-size:.7rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Capacidad</div>
+        <span style="font-size:.86rem;font-family:'JetBrains Mono',monospace;">50 L</span>
+      </div>
+    </div>
+    <div style="font-size:.7rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Historial de movimientos (${hist.length})</div>
+    <div style="max-height:280px;overflow-y:auto;">${histHTML}</div>
+  `;
+  document.getElementById('modalDetalle').classList.add('open');
+}
+
+// ─── EGRESOS ──────────────────────────────────────────────────────────────────
+let egresoSeleccionados = new Set();
+
+function renderEgresos() {
+  egresoSeleccionados.clear();
+  actualizarBotonEgreso();
+
+  // Vacíos pendientes de devolución
+  const vacios = barriles
+    .filter(b => b.estado_actual === 'vacio')
+    .sort((a,b) => a.numero_barril.localeCompare(b.numero_barril, undefined, {numeric: true}));
+
+  const grid = document.getElementById('egresoGrid');
+  const empty = document.getElementById('egresoVacioEmpty');
+
+  if (vacios.length === 0) {
+    grid.innerHTML = '';
+    empty.style.display = 'block';
+  } else {
+    empty.style.display = 'none';
+    grid.innerHTML = vacios.map(b => `
+      <div class="egreso-card" id="ecard_${b.id}" onclick="toggleEgresoCard('${b.id}')">
+        <input type="checkbox" id="echk_${b.id}" onclick="event.stopPropagation();toggleEgresoCard('${b.id}')">
+        <div class="egreso-card-info">
+          <div class="egreso-card-num">#${esc(b.numero_barril)}</div>
+          <div class="egreso-card-estilo">${esc(b.estilo)}</div>
+          <div class="egreso-card-fecha">Vacío desde ${formatFecha(b.fecha_ultimo_cambio)}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  // Historial de egresos
+  const egresados = movimientos
+    .filter(m => m.estado_nuevo === 'egresado')
+    .sort((a,b) => new Date(b.fecha_hora) - new Date(a.fecha_hora));
+
+  document.getElementById('egresoHistList').innerHTML = egresados.length
+    ? egresados.map(m => renderMovItem(m, true)).join('')
+    : '<div class="empty-state"><div class="big">↩️</div><p>Sin devoluciones registradas aún</p></div>';
+}
+
+function toggleEgresoCard(id) {
+  const card = document.getElementById('ecard_' + id);
+  const chk  = document.getElementById('echk_' + id);
+  if (egresoSeleccionados.has(id)) {
+    egresoSeleccionados.delete(id);
+    card.classList.remove('selected');
+    chk.checked = false;
+  } else {
+    egresoSeleccionados.add(id);
+    card.classList.add('selected');
+    chk.checked = true;
+  }
+  actualizarBotonEgreso();
+}
+
+function toggleSelTodos() {
+  const vacios = barriles.filter(b => b.estado_actual === 'vacio');
+  const todosSeleccionados = vacios.every(b => egresoSeleccionados.has(b.id));
+  vacios.forEach(b => {
+    const card = document.getElementById('ecard_' + b.id);
+    const chk  = document.getElementById('echk_' + b.id);
+    if (!card) return;
+    if (todosSeleccionados) {
+      egresoSeleccionados.delete(b.id);
+      card.classList.remove('selected');
+      chk.checked = false;
+    } else {
+      egresoSeleccionados.add(b.id);
+      card.classList.add('selected');
+      chk.checked = true;
+    }
+  });
+  actualizarBotonEgreso();
+}
+
+function actualizarBotonEgreso() {
+  const n = egresoSeleccionados.size;
+  document.getElementById('egresoSelCount').textContent = n;
+  const btn = document.getElementById('btnRegistrarEgreso');
+  btn.disabled = n === 0;
+  btn.style.opacity = n === 0 ? '.5' : '1';
+  btn.style.cursor  = n === 0 ? 'not-allowed' : 'pointer';
+}
+
+function abrirModalEgreso() {
+  if (egresoSeleccionados.size === 0) return;
+  const n = egresoSeleccionados.size;
+  const nums = [...egresoSeleccionados]
+    .map(id => barriles.find(b => b.id === id))
+    .filter(Boolean)
+    .map(b => `<strong>#${esc(b.numero_barril)}</strong> (${esc(b.estilo)})`)
+    .join(', ');
+  document.getElementById('modalEgresoDesc').innerHTML =
+    `Se registrará la devolución de <strong class="confirm-highlight">${n} barril${n>1?'es':''}</strong>:<br>
+     <span style="font-size:.82rem;color:var(--text3);line-height:1.7;">${nums}</span>`;
+  document.getElementById('egresoObsInput').value = '';
+  document.getElementById('modalEgresoConfirm').onclick = ejecutarEgreso;
+  document.getElementById('modalEgreso').classList.add('open');
+  document.getElementById('egresoObsInput').focus();
+}
+
+function ejecutarEgreso() {
+  const obs = document.getElementById('egresoObsInput').value.trim();
+  const now = new Date().toISOString();
+  const ids = [...egresoSeleccionados];
+
+  ids.forEach(id => {
+    const barril = barriles.find(b => b.id === id);
+    if (!barril) return;
+    movimientos.push({
+      id_movimiento:      genId(),
+      id_barril:          id,
+      fecha_hora:         now,
+      estado_anterior:    barril.estado_actual,
+      estado_nuevo:       'egresado',
+      ubicacion_anterior: barril.ubicacion_actual,
+      ubicacion_nueva:    'devuelto_proveedor',
+      observacion:        obs || 'Devolución al proveedor'
+    });
+    barril.estado_actual    = 'egresado';
+    barril.ubicacion_actual = 'devuelto_proveedor';
+    barril.fecha_ultimo_cambio = now;
+    if (obs) barril.observaciones = obs;
+  });
+
+  guardarDatos();
+  closeModal('modalEgreso');
+  toast(`${ids.length} barril${ids.length>1?'es':''} devuelto${ids.length>1?'s':''} al proveedor`, 'success');
+  renderEgresos();
+  renderDashboard();
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+function refreshCurrentPage() {
+  const active = document.querySelector('.page.active');
+  if (!active) return;
+  const id = active.id.replace('page-', '');
+  if (id === 'dashboard') renderDashboard();
+  if (id === 'barriles')  renderBarriles();
+  if (id === 'egresos')   renderEgresos();
+  if (id === 'historial') renderHistorial();
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+// Cerrar modales con click afuera
+document.querySelectorAll('.modal-bg').forEach(bg => {
+  bg.addEventListener('click', e => {
+    if (e.target === bg) bg.classList.remove('open');
+  });
+});
+
+function esc(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatFecha(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  const pad = n => String(n).padStart(2,'0');
+  return `${pad(d.getDate())}/${pad(d.getMonth()+1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function toast(msg, type = 'success') {
+  const container = document.getElementById('toastContainer');
+  const div = document.createElement('div');
+  div.className = `toast toast-${type}`;
+  const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+  div.innerHTML = `<span>${icons[type]||''}</span><span>${esc(msg)}</span>`;
+  container.appendChild(div);
+  setTimeout(() => div.remove(), 3000);
+}
+
+// Enter en modales
+document.getElementById('nObs').addEventListener('keydown', e => { if (e.key === 'Enter') guardarNuevoBarril(); });
+document.getElementById('nEstiloOtro').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('nNúmero').focus(); });
+document.getElementById('obsInput').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('modalObsConfirm').click(); });
+document.getElementById('egresoObsInput').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('modalEgresoConfirm').click(); });
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+cargarDatos();
+renderDashboard();
+</script>
+</body>
+</html>
