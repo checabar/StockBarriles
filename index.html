@@ -2063,6 +2063,12 @@
       const now = new Date().toISOString();
       const nuevaUbic = UBICACION_MAP[nuevoEstado];
 
+      // Guardar estado anterior para rollback
+      const prevEstado = barril.estado_actual;
+      const prevUbic = barril.ubicacion_actual;
+      const prevFecha = barril.fecha_ultimo_cambio;
+      const prevObs = barril.observaciones;
+
       const mov = {
         id_movimiento: genId(), id_barril: id, fecha_hora: now,
         estado_anterior: barril.estado_actual, estado_nuevo: nuevoEstado,
@@ -2082,13 +2088,23 @@
       refreshCurrentPage();
 
       // Sync Supabase
-      await Promise.all([
+      const results = await Promise.all([
         sb.from('barriles').update({
           estado_actual: nuevoEstado, ubicacion_actual: nuevaUbic,
           fecha_ultimo_cambio: now, observaciones: barril.observaciones
         }).eq('id', id),
         sb.from('movimientos').insert(mov)
       ]);
+      const err = results.find(r => r.error)?.error;
+      if (err) {
+        barril.estado_actual = prevEstado;
+        barril.ubicacion_actual = prevUbic;
+        barril.fecha_ultimo_cambio = prevFecha;
+        barril.observaciones = prevObs;
+        movimientos = movimientos.filter(m => m.id_movimiento !== mov.id_movimiento);
+        toast(`Error al guardar cambio: ${err.message}`, 'error');
+        refreshCurrentPage();
+      }
     }
 
     // ─── NUEVO BARRIL ─────────────────────────────────────────────────────────────
@@ -2142,10 +2158,18 @@
       refreshCurrentPage();
       renderEstilosFilter();
 
-      await Promise.all([
+      const results = await Promise.all([
         sb.from('barriles').insert(nuevoBarril),
         sb.from('movimientos').insert(nuevoMov)
       ]);
+      const err = results.find(r => r.error)?.error;
+      if (err) {
+        barriles = barriles.filter(b => b.id !== id);
+        movimientos = movimientos.filter(m => m.id_movimiento !== nuevoMov.id_movimiento);
+        toast(`Error al guardar barril: ${err.message}`, 'error');
+        refreshCurrentPage();
+        renderEstilosFilter();
+      }
     }
 
     // ─── EDITAR BARRIL ────────────────────────────────────────────────────────────
@@ -2196,6 +2220,13 @@
       const now = new Date().toISOString();
       let mov = null;
 
+      // Guardar estado anterior para rollback
+      const prev = {
+        numero_barril: barril.numero_barril, estilo: barril.estilo,
+        estado_actual: barril.estado_actual, ubicacion_actual: barril.ubicacion_actual,
+        observaciones: barril.observaciones, fecha_ultimo_cambio: barril.fecha_ultimo_cambio
+      };
+
       if (estadoCambio) {
         mov = {
           id_movimiento: genId(), id_barril: barril.id,
@@ -2223,7 +2254,14 @@
         ...(estadoCambio ? { fecha_ultimo_cambio: now } : {})
       }).eq('id', editandoId)];
       if (mov) ops.push(sb.from('movimientos').insert(mov));
-      await Promise.all(ops);
+      const results = await Promise.all(ops);
+      const err = results.find(r => r.error)?.error;
+      if (err) {
+        Object.assign(barril, prev);
+        if (mov) movimientos = movimientos.filter(m => m.id_movimiento !== mov.id_movimiento);
+        toast(`Error al guardar edición: ${err.message}`, 'error');
+        refreshCurrentPage();
+      }
     }
 
     // ─── ELIMINAR ─────────────────────────────────────────────────────────────────
@@ -2231,11 +2269,24 @@
       const barril = barriles.find(b => b.id === id);
       if (!barril) return;
       if (!confirm(`¿Eliminar el barril #${barril.numero_barril} (${barril.estilo}) definitivamente?\n\nSu historial también será eliminado.`)) return;
+
+      // Guardar backup para rollback
+      const barrilBackup = { ...barril };
+      const movsBackup = movimientos.filter(m => m.id_barril === id);
+
       barriles = barriles.filter(b => b.id !== id);
       movimientos = movimientos.filter(m => m.id_barril !== id);
       toast(`Barril #${barril.numero_barril} eliminado`, 'info');
       refreshCurrentPage();
-      await sb.from('barriles').delete().eq('id', id);
+
+      const { error } = await sb.from('barriles').delete().eq('id', id);
+      if (error) {
+        barriles = [...barriles, barrilBackup].sort((a, b) =>
+          a.numero_barril.localeCompare(b.numero_barril, undefined, { numeric: true }));
+        movimientos = [...movimientos, ...movsBackup];
+        toast(`Error al eliminar barril: ${error.message}`, 'error');
+        refreshCurrentPage();
+      }
     }
 
     // ─── DETALLE BARRIL ───────────────────────────────────────────────────────────
@@ -2415,13 +2466,30 @@
       renderEgresos();
       renderDashboard();
 
-      await Promise.all([
+      const results = await Promise.all([
         ...ids.map(id => sb.from('barriles').update({
           estado_actual: 'egresado', ubicacion_actual: 'devuelto_proveedor',
           fecha_ultimo_cambio: now, ...(obs ? { observaciones: obs } : {})
         }).eq('id', id)),
         sb.from('movimientos').insert(nuevosMovs)
       ]);
+      const err = results.find(r => r.error)?.error;
+      if (err) {
+        // Rollback: restaurar estados anteriores
+        ids.forEach(id => {
+          const barril = barriles.find(b => b.id === id);
+          const movBackup = nuevosMovs.find(m => m.id_barril === id);
+          if (barril && movBackup) {
+            barril.estado_actual = movBackup.estado_anterior;
+            barril.ubicacion_actual = movBackup.ubicacion_anterior;
+            barril.fecha_ultimo_cambio = movBackup.fecha_hora; // approximate
+          }
+        });
+        movimientos = movimientos.filter(m => !nuevosMovs.find(nm => nm.id_movimiento === m.id_movimiento));
+        toast(`Error al registrar egreso: ${err.message}`, 'error');
+        renderEgresos();
+        renderDashboard();
+      }
     }
 
     // ─── HELPERS ──────────────────────────────────────────────────────────────────
