@@ -1752,11 +1752,6 @@
         if (em) throw em;
         barriles = b || [];
         movimientos = m || [];
-        // Solo seedear si Supabase confirma que no hay ninguna fila
-        if (barriles.length === 0) {
-          const { count } = await sb.from('barriles').select('*', { count: 'exact', head: true });
-          if (count === 0) await seedDatosPrueba();
-        }
       } catch (e) {
         console.error(e);
         toast('Error conectando a la base de datos', 'error');
