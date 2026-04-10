@@ -4,6 +4,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>BARRILES — Stock Manager</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1749,7 +1752,11 @@
         if (em) throw em;
         barriles = b || [];
         movimientos = m || [];
-        if (barriles.length === 0) await seedDatosPrueba();
+        // Solo seedear si Supabase confirma que no hay ninguna fila
+        if (barriles.length === 0) {
+          const { count } = await sb.from('barriles').select('*', { count: 'exact', head: true });
+          if (count === 0) await seedDatosPrueba();
+        }
       } catch (e) {
         console.error(e);
         toast('Error conectando a la base de datos', 'error');
@@ -2279,12 +2286,20 @@
       toast(`Barril #${barril.numero_barril} eliminado`, 'info');
       refreshCurrentPage();
 
-      const { error } = await sb.from('barriles').delete().eq('id', id);
+      const { error, count } = await sb.from('barriles').delete({ count: 'exact' }).eq('id', id);
+      console.log('[DELETE]', { id, error, count });
       if (error) {
         barriles = [...barriles, barrilBackup].sort((a, b) =>
           a.numero_barril.localeCompare(b.numero_barril, undefined, { numeric: true }));
         movimientos = [...movimientos, ...movsBackup];
         toast(`Error al eliminar barril: ${error.message}`, 'error');
+        refreshCurrentPage();
+      } else if (count === 0) {
+        // El delete no encontró la fila en Supabase
+        barriles = [...barriles, barrilBackup].sort((a, b) =>
+          a.numero_barril.localeCompare(b.numero_barril, undefined, { numeric: true }));
+        movimientos = [...movimientos, ...movsBackup];
+        toast('Error: no se encontró el barril en la base de datos. Recargá la página.', 'error');
         refreshCurrentPage();
       }
     }
