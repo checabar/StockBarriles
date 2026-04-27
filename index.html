@@ -8,6 +8,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>COCTELERÍA — Stock Manager</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍸</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -1042,7 +1043,6 @@
           <option value="">Todos los estados</option>
           <option value="cerrada_stock">Cerradas (Stock)</option>
           <option value="abierta_barra">Abiertas en Barra</option>
-          <option value="vacia">Vacías</option>
         </select>
         <select id="filterProducto" onchange="renderBotellas()">
           <option value="">Todos los productos</option>
@@ -1384,11 +1384,6 @@
           <div class="kpi-value">${abiertas}</div>
           <div class="kpi-label">Abiertas en Barra</div>
         </div>
-        <div class="kpi-card red">
-          <span class="kpi-icon">🔴</span>
-          <div class="kpi-value">${vacias}</div>
-          <div class="kpi-label">Vacías</div>
-        </div>
         <div class="kpi-card purple">
           <span class="kpi-icon">🍾</span>
           <div class="kpi-value">${total}</div>
@@ -1396,25 +1391,25 @@
         </div>
       `;
 
-      // Resumen por producto + marca
+      // Resumen por producto + marca: incluye todos los productos pero solo cuenta activas
       const productosMap = {};
       botellas.forEach(b => {
         const key = `${b.producto}|||${b.marca || ''}`;
-        if (!productosMap[key]) productosMap[key] = { producto: b.producto, marca: b.marca || '', cerrada: 0, abierta: 0, vacia: 0 };
+        if (!productosMap[key]) productosMap[key] = { producto: b.producto, marca: b.marca || '', cerrada: 0, abierta: 0 };
         if (b.estado_actual === 'cerrada_stock') productosMap[key].cerrada++;
         else if (b.estado_actual === 'abierta_barra') productosMap[key].abierta++;
-        else productosMap[key].vacia++;
       });
 
       const productosHTML = Object.values(productosMap)
-        .sort((a, b) => (b.cerrada + b.abierta + b.vacia) - (a.cerrada + a.abierta + a.vacia))
-        .map(({ producto, marca, cerrada, abierta, vacia }) => {
-          const tot = cerrada + abierta + vacia;
-          const pills = [
-            cerrada ? `<span class="ppill pp-g">${cerrada} cerrada${cerrada > 1 ? 's' : ''}</span>` : '',
-            abierta ? `<span class="ppill pp-y">${abierta} abierta${abierta > 1 ? 's' : ''}</span>` : '',
-            vacia   ? `<span class="ppill pp-r">${vacia} vacía${vacia > 1 ? 's' : ''}</span>`       : ''
-          ].filter(Boolean).join('');
+        .sort((a, b) => (b.cerrada + b.abierta) - (a.cerrada + a.abierta))
+        .map(({ producto, marca, cerrada, abierta }) => {
+          const tot = cerrada + abierta;
+          const pills = tot === 0
+            ? `<span class="ppill" style="background:rgba(100,100,120,.12);color:var(--text3);border:1px solid rgba(100,100,120,.18);">sin stock</span>`
+            : [
+                cerrada ? `<span class="ppill pp-g">${cerrada} cerrada${cerrada > 1 ? 's' : ''}</span>` : '',
+                abierta ? `<span class="ppill pp-y">${abierta} abierta${abierta > 1 ? 's' : ''}</span>` : ''
+              ].filter(Boolean).join('');
           return `
             <div class="producto-row">
               <div class="producto-name">
@@ -1422,7 +1417,7 @@
                 ${marca ? `<span style="font-size:.76rem;color:var(--text3);font-weight:400;"> · ${esc(marca)}</span>` : ''}
               </div>
               <div class="producto-pills">${pills}</div>
-              <div class="producto-total">${tot}</div>
+              <div class="producto-total" style="${tot === 0 ? 'color:var(--text3);' : ''}">${tot}</div>
             </div>`;
         }).join('');
 
@@ -1441,7 +1436,7 @@
 
     // ─── TABLA BOTELLAS ───────────────────────────────────────────────────────────
     function renderProductosFilter() {
-      const productos = [...new Set(botellas.map(b => b.producto))].sort();
+      const productos = [...new Set(botellas.filter(b => b.estado_actual !== 'vacia').map(b => b.producto))].sort();
       const sel = document.getElementById('filterProducto');
       const val = sel.value;
       sel.innerHTML = '<option value="">Todos los productos</option>' +
@@ -1453,14 +1448,15 @@
       const estado   = document.getElementById('filterEstado').value;
       const producto = document.getElementById('filterProducto').value;
 
-      let filtered = botellas.filter(b => {
+      const botellasActivas = botellas.filter(b => b.estado_actual !== 'vacia');
+      let filtered = botellasActivas.filter(b => {
         if (q && !b.nombre_botella.toLowerCase().includes(q) && !b.producto.toLowerCase().includes(q)) return false;
         if (estado   && b.estado_actual !== estado)   return false;
         if (producto && b.producto      !== producto) return false;
         return true;
       }).sort((a, b) => a.nombre_botella.localeCompare(b.nombre_botella, undefined, { numeric: true }));
 
-      document.getElementById('countLabel').textContent = `${filtered.length} / ${botellas.length} botellas`;
+      document.getElementById('countLabel').textContent = `${filtered.length} / ${botellasActivas.length} botellas`;
 
       const tbody = document.getElementById('botellasBody');
       tbody.innerHTML = filtered.map(b => {
