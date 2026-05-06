@@ -1786,6 +1786,29 @@
       return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     }
 
+    // ─── REALTIME ─────────────────────────────────────────────────────────────────
+    function iniciarRealtime() {
+      sb.channel('stock-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'barriles' }, ({ eventType, new: nuevo, old }) => {
+          if (eventType === 'INSERT') {
+            if (!barriles.find(b => b.id === nuevo.id)) barriles.push(nuevo);
+          } else if (eventType === 'UPDATE') {
+            const i = barriles.findIndex(b => b.id === nuevo.id);
+            if (i !== -1) barriles[i] = nuevo; else barriles.push(nuevo);
+          } else if (eventType === 'DELETE') {
+            barriles = barriles.filter(b => b.id !== old.id);
+            movimientos = movimientos.filter(m => m.id_barril !== old.id);
+          }
+          renderEstilosFilter();
+          refreshCurrentPage();
+        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'movimientos' }, ({ new: nuevo }) => {
+          if (!movimientos.find(m => m.id_movimiento === nuevo.id_movimiento)) movimientos.push(nuevo);
+          refreshCurrentPage();
+        })
+        .subscribe();
+    }
+
     // ─── NAVEGACIÓN ───────────────────────────────────────────────────────────────
     document.querySelectorAll('.nav-item').forEach(item => {
       item.addEventListener('click', () => {
@@ -2495,6 +2518,7 @@
     (async () => {
       await cargarDatos();
       renderDashboard();
+      iniciarRealtime();
     })();
   </script>
 </body>
