@@ -1747,7 +1747,7 @@
           const lb = JSON.parse(localB);
           const lm = JSON.parse(localStorage.getItem('movimientos_v1') || '[]');
           if (lb.length > 0) {
-            await sb.from('barriles').upsert(lb, { onConflict: 'id' });
+            await sb.from('barriles').upsert(lb, { onConflict: 'numero_barril' });
             if (lm.length > 0) await sb.from('movimientos').upsert(lm, { onConflict: 'id_movimiento' });
           }
           localStorage.removeItem('barriles_v1');
@@ -2132,7 +2132,18 @@
         sb.from('movimientos').insert(nuevoMov)
       ]);
 
-      if (e1 || e2) { toast('Error al guardar', 'error'); return; }
+      if (e1) {
+        if (e1.code === '23505') {
+          toast(`El barril #${numero} ya está cargado en el sistema`, 'error');
+          // Recargar datos para sincronizar
+          const { data: b } = await sb.from('barriles').select('*');
+          const { data: m } = await sb.from('movimientos').select('*');
+          if (b) { barriles = b; movimientos = m || movimientos; refreshCurrentPage(); renderEstilosFilter(); }
+        } else {
+          toast('Error al guardar', 'error');
+        }
+        return;
+      }
 
       barriles.push(nuevoBarril);
       movimientos.push(nuevoMov);
