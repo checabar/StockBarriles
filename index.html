@@ -10,6 +10,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700;800&display=swap"
     rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
   <style>
     /* ─── TOKENS ──────────────────────────────────────────────────────────────── */
@@ -1335,7 +1336,7 @@
         Historial
       </div>
     </nav>
-    <div class="sidebar-footer">50L por barril · localStorage</div>
+    <div class="sidebar-footer">50L por barril · Supabase</div>
   </aside>
 
   <!-- ═══════════════════════════════════════════════════════════ MAIN -->
@@ -1726,47 +1727,59 @@
       { numero: '347', estilo: 'Good Devil', estado: 'pinchado_barra_arriba' },
     ];
 
+    // ─── SUPABASE ────────────────────────────────────────────────────────────────
+    const SUPABASE_URL = 'https://uwctzexvupijvuxskhmz.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV3Y3R6ZXh2dXBpanZ1eHNraG16Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NTk2ODMsImV4cCI6MjA5MTMzNTY4M30.RfLFsFH7OQnPcMwNn4YeQINpkQi0Jyy9lHZiCSUngyY';
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
     // ─── STORAGE ─────────────────────────────────────────────────────────────────
     let barriles = [];
     let movimientos = [];
 
-    function cargarDatos() {
+    async function cargarDatos() {
+      document.getElementById('kpiGrid').innerHTML =
+        '<div style="color:var(--text3);padding:20px;grid-column:1/-1;">Cargando datos...</div>';
+
+      // Migrar localStorage → Supabase si hay datos locales pendientes
       try {
-        const b = localStorage.getItem('barriles_v1');
-        const m = localStorage.getItem('movimientos_v1');
-        barriles = b ? JSON.parse(b) : [];
-        movimientos = m ? JSON.parse(m) : [];
-      } catch (e) {
-        barriles = []; movimientos = [];
-      }
+        const localB = localStorage.getItem('barriles_v1');
+        if (localB) {
+          const lb = JSON.parse(localB);
+          const lm = JSON.parse(localStorage.getItem('movimientos_v1') || '[]');
+          if (lb.length > 0) {
+            await sb.from('barriles').upsert(lb, { onConflict: 'id' });
+            if (lm.length > 0) await sb.from('movimientos').upsert(lm, { onConflict: 'id_movimiento' });
+          }
+          localStorage.removeItem('barriles_v1');
+          localStorage.removeItem('movimientos_v1');
+        }
+      } catch (_) {}
+
+      const { data: b, error: eb } = await sb.from('barriles').select('*');
+      const { data: m } = await sb.from('movimientos').select('*');
+
+      if (eb) { toast('Error al conectar con la base de datos', 'error'); return; }
+      barriles = b || [];
+      movimientos = m || [];
 
       if (barriles.length === 0) {
-        // Cargar datos de prueba
-        DATOS_PRUEBA.forEach(d => {
-          const id = genId();
-          const estado = d.estado;
-          const ubicacion = UBICACION_MAP[estado];
-          const now = new Date().toISOString();
-          barriles.push({
-            id, numero_barril: d.numero, estilo: d.estilo,
-            estado_actual: estado, ubicacion_actual: ubicacion,
-            fecha_ultimo_cambio: now, observaciones: ''
-          });
-          movimientos.push({
-            id_movimiento: genId(), id_barril: id,
-            fecha_hora: now,
-            estado_anterior: null, estado_nuevo: estado,
-            ubicacion_anterior: null, ubicacion_nueva: ubicacion,
-            observacion: 'Carga inicial de datos de prueba'
-          });
-        });
-        guardarDatos();
+        const ahora = new Date().toISOString();
+        const nuevosBarriles = DATOS_PRUEBA.map(d => ({
+          id: genId(), numero_barril: d.numero, estilo: d.estilo,
+          estado_actual: d.estado, ubicacion_actual: UBICACION_MAP[d.estado],
+          fecha_ultimo_cambio: ahora, observaciones: ''
+        }));
+        const nuevosMovs = nuevosBarriles.map(nb => ({
+          id_movimiento: genId(), id_barril: nb.id, fecha_hora: ahora,
+          estado_anterior: null, estado_nuevo: nb.estado_actual,
+          ubicacion_anterior: null, ubicacion_nueva: nb.ubicacion_actual,
+          observacion: 'Carga inicial'
+        }));
+        await sb.from('barriles').insert(nuevosBarriles);
+        await sb.from('movimientos').insert(nuevosMovs);
+        barriles = nuevosBarriles;
+        movimientos = nuevosMovs;
       }
-    }
-
-    function guardarDatos() {
-      localStorage.setItem('barriles_v1', JSON.stringify(barriles));
-      localStorage.setItem('movimientos_v1', JSON.stringify(movimientos));
     }
 
     function genId() {
@@ -2028,7 +2041,7 @@
       document.getElementById('obsInput').focus();
     }
 
-    function ejecutarCambio(id, nuevoEstado) {
+    async function ejecutarCambio(id, nuevoEstado) {
       const barril = barriles.find(b => b.id === id);
       if (!barril) return;
 
@@ -2036,27 +2049,29 @@
       const now = new Date().toISOString();
       const nuevaUbic = UBICACION_MAP[nuevoEstado];
 
-      movimientos.push({
-        id_movimiento: genId(),
-        id_barril: id,
-        fecha_hora: now,
-        estado_anterior: barril.estado_actual,
-        estado_nuevo: nuevoEstado,
-        ubicacion_anterior: barril.ubicacion_actual,
-        ubicacion_nueva: nuevaUbic,
+      const movimiento = {
+        id_movimiento: genId(), id_barril: id, fecha_hora: now,
+        estado_anterior: barril.estado_actual, estado_nuevo: nuevoEstado,
+        ubicacion_anterior: barril.ubicacion_actual, ubicacion_nueva: nuevaUbic,
         observacion: obs
-      });
+      };
+      const cambioBarril = {
+        estado_actual: nuevoEstado, ubicacion_actual: nuevaUbic,
+        fecha_ultimo_cambio: now, observaciones: obs || barril.observaciones
+      };
 
-      barril.estado_actual = nuevoEstado;
-      barril.ubicacion_actual = nuevaUbic;
-      barril.fecha_ultimo_cambio = now;
-      barril.observaciones = obs || barril.observaciones;
+      const [{ error: e1 }, { error: e2 }] = await Promise.all([
+        sb.from('barriles').update(cambioBarril).eq('id', id),
+        sb.from('movimientos').insert(movimiento)
+      ]);
 
-      guardarDatos();
+      if (e1 || e2) { toast('Error al guardar', 'error'); return; }
+
+      Object.assign(barril, cambioBarril);
+      movimientos.push(movimiento);
+
       closeModal('modalObs');
       toast(`Barril #${barril.numero_barril} → ${ESTADOS[nuevoEstado].label}`, 'success');
-
-      // Refresh active page
       refreshCurrentPage();
     }
 
@@ -2081,7 +2096,7 @@
       document.getElementById('nNúmero').focus();
     }
 
-    function guardarNuevoBarril() {
+    async function guardarNuevoBarril() {
       const numero = document.getElementById('nNúmero').value.trim();
       const selVal = document.getElementById('nEstilo').value;
       const estilo = selVal === '__otro__'
@@ -2100,24 +2115,31 @@
       const ubic = UBICACION_MAP[estado];
       const now = new Date().toISOString();
 
-      barriles.push({
+      const nuevoBarril = {
         id, numero_barril: numero, estilo,
         estado_actual: estado, ubicacion_actual: ubic,
         fecha_ultimo_cambio: now, observaciones: obs
-      });
-      movimientos.push({
+      };
+      const nuevoMov = {
         id_movimiento: genId(), id_barril: id, fecha_hora: now,
         estado_anterior: null, estado_nuevo: estado,
         ubicacion_anterior: null, ubicacion_nueva: ubic,
         observacion: obs || 'Barril agregado'
-      });
+      };
 
-      guardarDatos();
+      const [{ error: e1 }, { error: e2 }] = await Promise.all([
+        sb.from('barriles').insert(nuevoBarril),
+        sb.from('movimientos').insert(nuevoMov)
+      ]);
+
+      if (e1 || e2) { toast('Error al guardar', 'error'); return; }
+
+      barriles.push(nuevoBarril);
+      movimientos.push(nuevoMov);
+
       closeModal('modalNuevo');
       toast(`Barril #${numero} agregado correctamente`, 'success');
       refreshCurrentPage();
-
-      // Actualizar filtro estilos
       renderEstilosFilter();
     }
 
@@ -2148,7 +2170,7 @@
       document.getElementById('modalEditar').classList.add('open');
     }
 
-    function guardarEdicion() {
+    async function guardarEdicion() {
       const barril = barriles.find(b => b.id === editandoId);
       if (!barril) return;
 
@@ -2160,7 +2182,6 @@
       if (!numero) { toast('Ingresá el número de barril', 'error'); return; }
       if (!estilo) { toast('Seleccioná el estilo', 'error'); return; }
 
-      // Verificar duplicado de número (excluyendo el barril actual)
       if (barriles.find(b => b.id !== editandoId && b.numero_barril.toLowerCase() === numero.toLowerCase())) {
         toast(`El barril #${numero} ya existe`, 'error'); return;
       }
@@ -2168,25 +2189,29 @@
       const estadoCambio = estado !== barril.estado_actual;
       const now = new Date().toISOString();
 
+      const cambioBarril = {
+        numero_barril: numero, estilo, estado_actual: estado,
+        ubicacion_actual: UBICACION_MAP[estado], observaciones: obs,
+        ...(estadoCambio ? { fecha_ultimo_cambio: now } : {})
+      };
+
+      let nuevoMov = null;
+      const ops = [sb.from('barriles').update(cambioBarril).eq('id', barril.id)];
       if (estadoCambio) {
-        movimientos.push({
-          id_movimiento: genId(),
-          id_barril: barril.id,
-          estado_anterior: barril.estado_actual,
-          estado_nuevo: estado,
-          fecha_hora: now,
-          observaciones: obs || 'Edición manual'
-        });
+        nuevoMov = {
+          id_movimiento: genId(), id_barril: barril.id,
+          estado_anterior: barril.estado_actual, estado_nuevo: estado,
+          fecha_hora: now, observacion: obs || 'Edición manual'
+        };
+        ops.push(sb.from('movimientos').insert(nuevoMov));
       }
 
-      barril.numero_barril = numero;
-      barril.estilo = estilo;
-      barril.estado_actual = estado;
-      barril.ubicacion_actual = UBICACION_MAP[estado];
-      barril.observaciones = obs;
-      if (estadoCambio) barril.fecha_ultimo_cambio = now;
+      const results = await Promise.all(ops);
+      if (results.some(r => r.error)) { toast('Error al guardar', 'error'); return; }
 
-      guardarDatos();
+      Object.assign(barril, cambioBarril);
+      if (nuevoMov) movimientos.push(nuevoMov);
+
       closeModal('modalEditar');
       toast(`Barril #${numero} actualizado`, 'success');
 
@@ -2199,13 +2224,17 @@
     }
 
     // ─── ELIMINAR ─────────────────────────────────────────────────────────────────
-    function confirmarEliminar(id) {
+    async function confirmarEliminar(id) {
       const barril = barriles.find(b => b.id === id);
       if (!barril) return;
       if (!confirm(`¿Eliminar el barril #${barril.numero_barril} (${barril.estilo}) definitivamente?\n\nSu historial también será eliminado.`)) return;
+
+      await sb.from('movimientos').delete().eq('id_barril', id);
+      const { error } = await sb.from('barriles').delete().eq('id', id);
+      if (error) { toast('Error al eliminar', 'error'); return; }
+
       barriles = barriles.filter(b => b.id !== id);
       movimientos = movimientos.filter(m => m.id_barril !== id);
-      guardarDatos();
       toast(`Barril #${barril.numero_barril} eliminado`, 'info');
       refreshCurrentPage();
     }
@@ -2359,31 +2388,42 @@
       document.getElementById('egresoObsInput').focus();
     }
 
-    function ejecutarEgreso() {
+    async function ejecutarEgreso() {
       const obs = document.getElementById('egresoObsInput').value.trim();
       const now = new Date().toISOString();
       const ids = [...egresoSeleccionados];
 
+      const nuevosMovs = ids.map(id => {
+        const barril = barriles.find(b => b.id === id);
+        if (!barril) return null;
+        return {
+          id_movimiento: genId(), id_barril: id, fecha_hora: now,
+          estado_anterior: barril.estado_actual, estado_nuevo: 'egresado',
+          ubicacion_anterior: barril.ubicacion_actual, ubicacion_nueva: 'devuelto_proveedor',
+          observacion: obs || 'Devolución al proveedor'
+        };
+      }).filter(Boolean);
+
+      const [{ error: e1 }, { error: e2 }] = await Promise.all([
+        sb.from('barriles').update({
+          estado_actual: 'egresado', ubicacion_actual: 'devuelto_proveedor',
+          fecha_ultimo_cambio: now, ...(obs ? { observaciones: obs } : {})
+        }).in('id', ids),
+        sb.from('movimientos').insert(nuevosMovs)
+      ]);
+
+      if (e1 || e2) { toast('Error al registrar egreso', 'error'); return; }
+
       ids.forEach(id => {
         const barril = barriles.find(b => b.id === id);
         if (!barril) return;
-        movimientos.push({
-          id_movimiento: genId(),
-          id_barril: id,
-          fecha_hora: now,
-          estado_anterior: barril.estado_actual,
-          estado_nuevo: 'egresado',
-          ubicacion_anterior: barril.ubicacion_actual,
-          ubicacion_nueva: 'devuelto_proveedor',
-          observacion: obs || 'Devolución al proveedor'
-        });
         barril.estado_actual = 'egresado';
         barril.ubicacion_actual = 'devuelto_proveedor';
         barril.fecha_ultimo_cambio = now;
         if (obs) barril.observaciones = obs;
       });
+      movimientos.push(...nuevosMovs);
 
-      guardarDatos();
       closeModal('modalEgreso');
       toast(`${ids.length} barril${ids.length > 1 ? 'es' : ''} devuelto${ids.length > 1 ? 's' : ''} al proveedor`, 'success');
       renderEgresos();
@@ -2441,8 +2481,10 @@
     document.getElementById('egresoObsInput').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('modalEgresoConfirm').click(); });
 
     // ─── INIT ─────────────────────────────────────────────────────────────────────
-    cargarDatos();
-    renderDashboard();
+    (async () => {
+      await cargarDatos();
+      renderDashboard();
+    })();
   </script>
 </body>
 
